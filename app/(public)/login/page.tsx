@@ -48,11 +48,11 @@ export default function Login() {
       } else {
         throw new Error(data.error || "Login failed");
       }
+      toast.success("Login successful!");
     } catch (err: any) {
       toast.error(err.message);
     } finally {
       setLoading(false);
-      toast.success("Login successful!");
     }
   };
 
@@ -84,6 +84,16 @@ export default function Login() {
         >
           {loading ? "Logging in..." : "Login"}
         </button>
+
+        <p className="mt-4 text-sm text-gray-400">
+          Don’t have an account?{" "}
+          <span
+            className="text-blue-400 cursor-pointer"
+            onClick={() => router.push("/signup")}
+          >
+            Sign up
+          </span>
+        </p>
 
       </div>
     </div>
