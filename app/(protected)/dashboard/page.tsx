@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { apiFetch } from "@/lib/api";
 import Card from "@/components/Card";
 import CopyButton from "@/components/CopyButton";
@@ -11,24 +11,86 @@ export default function Home() {
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [lastTopic, setLastTopic] = useState("");
+  const [status, setStatus] = useState("");
 
+  // 🔥 important: store interval to clear later
+  const intervalRef = useRef<any>(null);
+
+  // -----------------------------
+  // GENERATE
+  // -----------------------------
   const handleGenerate = async () => {
     try {
       setLoading(true);
+      setResult(null);
       setLastTopic(topic);
+      setStatus("pending");
 
       const data = await apiFetch("/generate", {
         method: "POST",
         body: JSON.stringify({ topic }),
       });
 
-      setResult(data);
-      toast.success("Content generated!");
+      const jobId = data.job_id;
+
+      toast.success("Processing started 🚀");
+
+      pollJob(jobId);
+
     } catch (err: any) {
       toast.error(err.message);
-    } finally {
       setLoading(false);
     }
+  };
+
+  // -----------------------------
+  // POLLING
+  // -----------------------------
+  const pollJob = (jobId: number) => {
+    // clear old interval if exists
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
+    intervalRef.current = setInterval(async () => {
+      try {
+        const statusData = await apiFetch(`/status/${jobId}`);
+
+        setStatus(statusData.status);
+
+        if (statusData.status === "completed") {
+          clearInterval(intervalRef.current);
+
+          const resultData = await apiFetch(`/result/${jobId}`);
+
+          setResult(resultData);
+          setLoading(false);
+
+          toast.success("Content ready 🎉");
+        }
+
+        if (statusData.status === "failed") {
+          clearInterval(intervalRef.current);
+          setLoading(false);
+
+          toast.error("Generation failed ❌");
+        }
+
+      } catch (err) {
+        clearInterval(intervalRef.current);
+        setLoading(false);
+        toast.error("Something went wrong");
+      }
+    }, 2000);
+  };
+
+  // -----------------------------
+  // CLEAR RESULT
+  // -----------------------------
+  const handleClear = () => {
+    setResult(null);
+    setStatus("");
+    setTopic("");
   };
 
   return (
@@ -58,6 +120,13 @@ export default function Home() {
       >
         {loading ? "Generating..." : "Generate"}
       </button>
+
+      {/* STATUS TEXT */}
+      {loading && (
+        <p className="text-sm text-gray-400 mt-2">
+          Status: {status || "starting..."}
+        </p>
+      )}
 
       {/* EMPTY STATE */}
       {!result && !loading && (
@@ -111,9 +180,19 @@ export default function Home() {
             </div>
           </Card>
 
-          {/* SOURCE */}
-          <div className="text-xs text-gray-400">
-            Source: {result.source}
+          {/* SOURCE BADGE */}
+          <div>
+            <span
+              className={`text-xs px-2 py-1 rounded ${
+                result.source === "memory"
+                  ? "bg-green-700"
+                  : "bg-blue-700"
+              }`}
+            >
+              {result.source === "memory"
+                ? "⚡ From Memory"
+                : "🤖 AI Generated"}
+            </span>
           </div>
 
           {/* ACTION BUTTONS */}
@@ -131,7 +210,7 @@ export default function Home() {
 
             <button
               className="bg-gray-700 px-4 py-2 rounded"
-              onClick={() => setResult(null)}
+              onClick={handleClear}
             >
               Clear
             </button>
