@@ -56,7 +56,8 @@ export default function Home() {
       try {
         const statusData = await apiFetch(`/status/${jobId}`);
 
-        setStatus(statusData.status);
+        const currentStatus = statusData.status;
+        setStatus(currentStatus);
 
         if (statusData.status === "completed") {
           clearInterval(intervalRef.current);
@@ -67,6 +68,7 @@ export default function Home() {
           setLoading(false);
 
           toast.success("Content ready 🎉");
+          setStatus("completed");
         }
 
         if (statusData.status === "failed") {
@@ -137,10 +139,27 @@ export default function Home() {
 
       {/* LOADING SKELETON */}
       {loading && (
-        <div className="mt-6 space-y-4 animate-pulse">
-          <div className="h-6 bg-gray-700 rounded w-1/2"></div>
-          <div className="h-6 bg-gray-700 rounded w-2/3"></div>
-          <div className="h-6 bg-gray-700 rounded w-1/3"></div>
+        <div className="mt-6 space-y-4">
+
+          {/* STATUS BADGE */}
+          <div className="text-sm text-gray-400">
+            {status === "pending" && "🕒 Queued..."}
+            {status === "processing" && "⚙️ Generating content..."}
+            {!status && "Starting..."}
+          </div>
+
+          {/* PROGRESS BAR */}
+          <div className="w-full bg-gray-800 rounded h-2 overflow-hidden">
+            <div className="bg-blue-500 h-2 animate-pulse w-full"></div>
+          </div>
+
+          {/* SKELETON */}
+          <div className="space-y-3 animate-pulse">
+            <div className="h-4 bg-gray-700 rounded w-1/2"></div>
+            <div className="h-4 bg-gray-700 rounded w-2/3"></div>
+            <div className="h-4 bg-gray-700 rounded w-1/3"></div>
+          </div>
+
         </div>
       )}
 
