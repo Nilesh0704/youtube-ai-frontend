@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { apiFetch } from "@/lib/api";
 import Card from "@/components/Card";
 import CopyButton from "@/components/CopyButton";
@@ -10,11 +10,20 @@ export default function Home() {
   const [topic, setTopic] = useState("");
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [lastTopic, setLastTopic] = useState("");
   const [status, setStatus] = useState("");
+  const [currentJobId, setCurrentJobId] = useState<number | null>(null);
 
-  // 🔥 important: store interval to clear later
   const intervalRef = useRef<any>(null);
+
+  // 🔥 Load from history
+  useEffect(() => {
+    const stored = localStorage.getItem("selectedContent");
+
+    if (stored) {
+      setResult(JSON.parse(stored));
+      localStorage.removeItem("selectedContent");
+    }
+  }, []);
 
   // -----------------------------
   // GENERATE
@@ -23,7 +32,6 @@ export default function Home() {
     try {
       setLoading(true);
       setResult(null);
-      setLastTopic(topic);
       setStatus("pending");
 
       const data = await apiFetch("/generate", {
@@ -32,6 +40,7 @@ export default function Home() {
       });
 
       const jobId = data.job_id;
+      setCurrentJobId(jobId);
 
       toast.success("Processing started 🚀");
 
@@ -47,7 +56,6 @@ export default function Home() {
   // POLLING
   // -----------------------------
   const pollJob = (jobId: number) => {
-    // clear old interval if exists
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
@@ -55,58 +63,89 @@ export default function Home() {
     intervalRef.current = setInterval(async () => {
       try {
         const statusData = await apiFetch(`/status/${jobId}`);
-
         const currentStatus = statusData.status;
+
         setStatus(currentStatus);
 
-        if (statusData.status === "completed") {
+        if (currentStatus === "completed") {
           clearInterval(intervalRef.current);
 
           const resultData = await apiFetch(`/result/${jobId}`);
 
           setResult(resultData);
           setLoading(false);
+          setCurrentJobId(null);
 
           toast.success("Content ready 🎉");
-          setStatus("completed");
         }
 
-        if (statusData.status === "failed") {
+        if (currentStatus === "failed" || currentStatus === "cancelled") {
           clearInterval(intervalRef.current);
           setLoading(false);
+          setCurrentJobId(null);
 
-          toast.error("Generation failed ❌");
+          toast.error(`Job ${currentStatus}`);
         }
 
-      } catch (err) {
+      } catch {
         clearInterval(intervalRef.current);
         setLoading(false);
-        toast.error("Something went wrong");
+        setCurrentJobId(null);
       }
     }, 2000);
   };
 
   // -----------------------------
-  // CLEAR RESULT
+  // CANCEL
+  // -----------------------------
+  const handleCancel = async () => {
+    if (!currentJobId) return;
+
+    await apiFetch(`/cancel/${currentJobId}`, {
+      method: "POST",
+    });
+
+    setLoading(false);
+    setStatus("cancelled");
+    setCurrentJobId(null);
+
+    toast("Cancelled ❌");
+  };
+
+  // -----------------------------
+  // RETRY
+  // -----------------------------
+  const handleRetry = async () => {
+    if (!currentJobId) return;
+
+    const data = await apiFetch(`/retry/${currentJobId}`, {
+      method: "POST",
+    });
+
+    setLoading(true);
+    setResult(null);
+    setCurrentJobId(data.job_id);
+    setStatus("pending");
+
+    pollJob(data.job_id);
+  };
+
+  // -----------------------------
+  // CLEAR
   // -----------------------------
   const handleClear = () => {
     setResult(null);
-    setStatus("");
     setTopic("");
+    setStatus("");
   };
 
   return (
-    <div className="p-10 max-w-3xl mx-auto relative">
+    <div className="p-10 max-w-3xl mx-auto">
 
       <h1 className="text-3xl font-bold mb-6">
         Generate YouTube Content
       </h1>
 
-      <p className="text-sm text-gray-400 mb-4">
-        Free plan: 10 generations per minute
-      </p>
-
-      {/* INPUT */}
       <input
         value={topic}
         className="border p-3 w-full mb-4 rounded bg-black"
@@ -114,52 +153,44 @@ export default function Home() {
         onChange={(e) => setTopic(e.target.value)}
       />
 
-      {/* BUTTON */}
       <button
-        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded disabled:opacity-50"
+        className="bg-blue-600 px-6 py-2 rounded disabled:opacity-50"
         onClick={handleGenerate}
         disabled={loading || !topic}
       >
         {loading ? "Generating..." : "Generate"}
       </button>
 
-      {/* STATUS TEXT */}
-      {loading && (
-        <p className="text-sm text-gray-400 mt-2">
-          Status: {status || "starting..."}
-        </p>
-      )}
-
-      {/* EMPTY STATE */}
-      {!result && !loading && (
-        <div className="mt-10 text-center text-gray-500">
-          Enter a topic and generate content 🚀
+      {/* STATUS */}
+      {status && (
+        <div className="mt-2">
+          <span className="text-xs bg-gray-700 px-2 py-1 rounded">
+            {status.toUpperCase()}
+          </span>
         </div>
       )}
 
-      {/* LOADING SKELETON */}
+      {/* LOADING */}
       {loading && (
-        <div className="mt-6 space-y-4">
+        <div className="mt-6 space-y-3">
+          <div className="h-4 bg-gray-700 animate-pulse rounded w-1/2"></div>
+          <div className="h-4 bg-gray-700 animate-pulse rounded w-2/3"></div>
 
-          {/* STATUS BADGE */}
-          <div className="text-sm text-gray-400">
-            {status === "pending" && "🕒 Queued..."}
-            {status === "processing" && "⚙️ Generating content..."}
-            {!status && "Starting..."}
-          </div>
+          {currentJobId && (
+            <button
+              className="mt-4 bg-red-600 px-4 py-2 rounded"
+              onClick={handleCancel}
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      )}
 
-          {/* PROGRESS BAR */}
-          <div className="w-full bg-gray-800 rounded h-2 overflow-hidden">
-            <div className="bg-blue-500 h-2 animate-pulse w-full"></div>
-          </div>
-
-          {/* SKELETON */}
-          <div className="space-y-3 animate-pulse">
-            <div className="h-4 bg-gray-700 rounded w-1/2"></div>
-            <div className="h-4 bg-gray-700 rounded w-2/3"></div>
-            <div className="h-4 bg-gray-700 rounded w-1/3"></div>
-          </div>
-
+      {/* EMPTY */}
+      {!result && !loading && (
+        <div className="mt-10 text-gray-500 text-center">
+          Try: iPhone review, fitness vlog, crypto news 🚀
         </div>
       )}
 
@@ -167,64 +198,39 @@ export default function Home() {
       {result && (
         <div className="mt-8 space-y-6">
 
-          {/* IDEAS */}
           <Card title="Ideas">
-            <ul className="list-disc pl-5 space-y-1">
-              {result.ideas?.map((idea: string, i: number) => (
-                <li key={i}>{idea}</li>
+            <ul className="list-disc pl-5">
+              {result.ideas?.map((i: string, idx: number) => (
+                <li key={idx}>{i}</li>
               ))}
             </ul>
           </Card>
 
-          {/* TITLES */}
           <Card title="Titles">
-            <ul className="list-disc pl-5 space-y-1">
-              {result.titles?.map((title: string, i: number) => (
-                <li key={i} className="flex justify-between items-center">
-                  <span>{title}</span>
-                  <CopyButton text={title} />
+            <ul className="list-disc pl-5">
+              {result.titles?.map((t: string, idx: number) => (
+                <li key={idx} className="flex justify-between">
+                  <span>{t}</span>
+                  <CopyButton text={t} />
                 </li>
               ))}
             </ul>
           </Card>
 
-          {/* SCRIPT */}
           <Card title="Script">
-            <div className="flex justify-end mb-2">
-              <CopyButton text={result.script} />
-            </div>
-
-            <div className="whitespace-pre-wrap text-sm leading-relaxed">
+            <CopyButton text={result.script} />
+            <div className="whitespace-pre-wrap mt-2">
               {result.script}
             </div>
           </Card>
 
-          {/* SOURCE BADGE */}
-          <div>
-            <span
-              className={`text-xs px-2 py-1 rounded ${
-                result.source === "memory"
-                  ? "bg-green-700"
-                  : "bg-blue-700"
-              }`}
-            >
-              {result.source === "memory"
-                ? "⚡ From Memory"
-                : "🤖 AI Generated"}
-            </span>
-          </div>
-
-          {/* ACTION BUTTONS */}
-          <div className="flex gap-3 mt-4">
-
+          <div className="flex gap-3">
             <button
-              className="bg-yellow-500 px-4 py-2 rounded text-black font-medium"
-              onClick={() => {
-                setTopic(lastTopic);
-                handleGenerate();
-              }}
+              className="bg-yellow-500 px-4 py-2 rounded"
+              onClick={handleRetry}
+              disabled={loading}
             >
-              Regenerate
+              Retry
             </button>
 
             <button
@@ -233,7 +239,6 @@ export default function Home() {
             >
               Clear
             </button>
-
           </div>
 
         </div>
