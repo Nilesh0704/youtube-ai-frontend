@@ -107,26 +107,20 @@ export default function Home() {
       await apiFetch(`/cancel/${currentJobId}`, {
         method: "POST",
       });
-
-      // 🔥 Stop polling immediately
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-
-      // 🔥 Update UI state
-      setLoading(false);
-      setStatus("cancelled");
-
-      // ❗ IMPORTANT:
-      // Do NOT clear lastJobId (so retry works)
-      // Only clear current running job
-      setCurrentJobId(null);
-
-      toast("Cancelled ❌");
-
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err) {
+      console.error("Cancel failed:", err);
     }
+
+    // 🔥 ALWAYS update UI (even if API fails)
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
+    setLoading(false);
+    setStatus("cancelled");
+    setCurrentJobId(null);
+
+    toast("Cancelled ❌");
   };
 
   // -----------------------------
