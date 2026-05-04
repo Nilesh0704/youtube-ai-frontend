@@ -16,16 +16,6 @@ export default function Home() {
 
   const intervalRef = useRef<any>(null);
 
-  // 🔥 Load from history
-  useEffect(() => {
-    const stored = localStorage.getItem("selectedContent");
-
-    if (stored) {
-      setResult(JSON.parse(stored));
-      localStorage.removeItem("selectedContent");
-    }
-  }, []);
-
   // -----------------------------
   // GENERATE
   // -----------------------------
@@ -41,6 +31,7 @@ export default function Home() {
       });
 
       const jobId = data.job_id;
+
       setCurrentJobId(jobId);
       setLastJobId(jobId);
 
@@ -85,11 +76,9 @@ export default function Home() {
           clearInterval(intervalRef.current);
           setLoading(false);
           setCurrentJobId(null);
-
-          toast.error(`Job ${currentStatus}`);
         }
 
-      } catch {
+      } catch (err) {
         clearInterval(intervalRef.current);
         setLoading(false);
         setCurrentJobId(null);
@@ -108,10 +97,9 @@ export default function Home() {
         method: "POST",
       });
     } catch (err) {
-      console.error("Cancel failed:", err);
+      console.error("Cancel error:", err);
     }
 
-    // 🔥 ALWAYS update UI (even if API fails)
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
@@ -119,6 +107,7 @@ export default function Home() {
     setLoading(false);
     setStatus("cancelled");
     setCurrentJobId(null);
+    setResult(null); // 🔥 prevents crash
 
     toast("Cancelled ❌");
   };
@@ -129,17 +118,22 @@ export default function Home() {
   const handleRetry = async () => {
     if (!lastJobId) return;
 
-    const data = await apiFetch(`/retry/${lastJobId}`, {
-      method: "POST",
-    });
+    try {
+      const data = await apiFetch(`/retry/${lastJobId}`, {
+        method: "POST",
+      });
 
-    setLoading(true);
-    setResult(null);
-    setCurrentJobId(data.job_id);
-    setLastJobId(data.job_id);
-    setStatus("pending");
+      setLoading(true);
+      setResult(null);
+      setCurrentJobId(data.job_id);
+      setLastJobId(data.job_id);
+      setStatus("pending");
 
-    pollJob(data.job_id);
+      pollJob(data.job_id);
+
+    } catch (err: any) {
+      toast.error(err.message);
+    }
   };
 
   // -----------------------------
@@ -184,9 +178,9 @@ export default function Home() {
 
       {/* LOADING */}
       {loading && (
-        <div className="mt-6 space-y-3">
-          <div className="h-4 bg-gray-700 animate-pulse rounded w-1/2"></div>
-          <div className="h-4 bg-gray-700 animate-pulse rounded w-2/3"></div>
+        <div className="mt-6">
+          <div className="h-4 bg-gray-700 animate-pulse mb-2"></div>
+          <div className="h-4 bg-gray-700 animate-pulse mb-2"></div>
 
           {currentJobId && (
             <button
@@ -200,19 +194,19 @@ export default function Home() {
       )}
 
       {/* EMPTY */}
-      {!result && !loading && (
+      {!result && !loading && status !== "cancelled" && (
         <div className="mt-10 text-gray-500 text-center">
           Try: iPhone review, fitness vlog, crypto news 🚀
         </div>
       )}
 
-      {/* RESULT */}
-      {(result || status === "cancelled") && (
+      {/* RESULT (SAFE) */}
+      {result && result.script && (
         <div className="mt-8 space-y-6">
 
           <Card title="Ideas">
             <ul className="list-disc pl-5">
-              {result.ideas?.map((i: string, idx: number) => (
+              {result?.ideas?.map((i: string, idx: number) => (
                 <li key={idx}>{i}</li>
               ))}
             </ul>
@@ -220,7 +214,7 @@ export default function Home() {
 
           <Card title="Titles">
             <ul className="list-disc pl-5">
-              {result.titles?.map((t: string, idx: number) => (
+              {result?.titles?.map((t: string, idx: number) => (
                 <li key={idx} className="flex justify-between">
                   <span>{t}</span>
                   <CopyButton text={t} />
@@ -230,29 +224,32 @@ export default function Home() {
           </Card>
 
           <Card title="Script">
-            <CopyButton text={result.script} />
+            {result?.script && <CopyButton text={result.script} />}
             <div className="whitespace-pre-wrap mt-2">
               {result.script}
             </div>
           </Card>
 
-          <div className="flex gap-3">
-            <button
-              className="bg-yellow-500 px-4 py-2 rounded"
-              onClick={handleRetry}
-              disabled={loading}
-            >
-              Retry
-            </button>
+        </div>
+      )}
 
-            <button
-              className="bg-gray-700 px-4 py-2 rounded"
-              onClick={handleClear}
-            >
-              Clear
-            </button>
-          </div>
+      {/* RETRY BUTTON */}
+      {(status === "cancelled" || result?.script) && (
+        <div className="mt-6 flex gap-3">
+          <button
+            className="bg-yellow-500 px-4 py-2 rounded text-black"
+            onClick={handleRetry}
+            disabled={loading}
+          >
+            Retry
+          </button>
 
+          <button
+            className="bg-gray-700 px-4 py-2 rounded"
+            onClick={handleClear}
+          >
+            Clear
+          </button>
         </div>
       )}
 
