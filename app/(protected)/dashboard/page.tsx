@@ -12,6 +12,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [currentJobId, setCurrentJobId] = useState<number | null>(null);
+  const [lastJobId, setLastJobId] = useState<number | null>(null);
 
   const intervalRef = useRef<any>(null);
 
@@ -41,6 +42,7 @@ export default function Home() {
 
       const jobId = data.job_id;
       setCurrentJobId(jobId);
+      setLastJobId(jobId);
 
       toast.success("Processing started 🚀");
 
@@ -101,30 +103,46 @@ export default function Home() {
   const handleCancel = async () => {
     if (!currentJobId) return;
 
-    await apiFetch(`/cancel/${currentJobId}`, {
-      method: "POST",
-    });
+    try {
+      await apiFetch(`/cancel/${currentJobId}`, {
+        method: "POST",
+      });
 
-    setLoading(false);
-    setStatus("cancelled");
-    setCurrentJobId(null);
+      // 🔥 Stop polling immediately
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
 
-    toast("Cancelled ❌");
+      // 🔥 Update UI state
+      setLoading(false);
+      setStatus("cancelled");
+
+      // ❗ IMPORTANT:
+      // Do NOT clear lastJobId (so retry works)
+      // Only clear current running job
+      setCurrentJobId(null);
+
+      toast("Cancelled ❌");
+
+    } catch (err: any) {
+      toast.error(err.message);
+    }
   };
 
   // -----------------------------
   // RETRY
   // -----------------------------
   const handleRetry = async () => {
-    if (!currentJobId) return;
+    if (!lastJobId) return;
 
-    const data = await apiFetch(`/retry/${currentJobId}`, {
+    const data = await apiFetch(`/retry/${lastJobId}`, {
       method: "POST",
     });
 
     setLoading(true);
     setResult(null);
     setCurrentJobId(data.job_id);
+    setLastJobId(data.job_id);
     setStatus("pending");
 
     pollJob(data.job_id);
@@ -195,7 +213,7 @@ export default function Home() {
       )}
 
       {/* RESULT */}
-      {result && (
+      {(result || status === "cancelled") && (
         <div className="mt-8 space-y-6">
 
           <Card title="Ideas">
