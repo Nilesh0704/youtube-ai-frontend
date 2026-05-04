@@ -3,95 +3,83 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import Card from "@/components/Card";
-import CopyButton from "@/components/CopyButton";
-import toast from "react-hot-toast";
 
-export default function History() {
-  const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function HistoryPage() {
+  const [history, setHistory] = useState<any[]>([]);
+  const [selected, setSelected] = useState<any>(null);
 
   useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const res = await apiFetch("/history");
-        setData(res);
-      } catch (err: any) {
-        toast.error(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchHistory();
   }, []);
 
+  const fetchHistory = async () => {
+    try {
+      const data = await apiFetch("/history");
+      setHistory(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
-    <div className="p-10 max-w-4xl mx-auto">
+    <div className="p-10 max-w-5xl mx-auto">
 
-      <h1 className="text-3xl font-bold mb-6">Your History</h1>
+      <h1 className="text-2xl font-bold mb-6">History</h1>
 
-      {/* LOADING */}
-      {loading && (
-        <div className="space-y-4 animate-pulse">
-          <div className="h-6 bg-gray-700 rounded w-1/3"></div>
-          <div className="h-32 bg-gray-800 rounded"></div>
-          <div className="h-32 bg-gray-800 rounded"></div>
+      {history.length === 0 && (
+        <p className="text-gray-400">No history yet</p>
+      )}
+
+      <div className="grid grid-cols-2 gap-6">
+
+        {/* LEFT */}
+        <div className="space-y-3">
+          {history.map((item, i) => (
+            <div
+              key={i}
+              className="p-3 border border-gray-700 rounded cursor-pointer hover:bg-gray-800"
+              onClick={() => setSelected(item)}
+            >
+              <p className="text-sm text-gray-300">{item.topic}</p>
+            </div>
+          ))}
         </div>
-      )}
 
-      {/* EMPTY STATE */}
-      {!loading && data.length === 0 && (
-        <p className="text-gray-400">No history found</p>
-      )}
+        {/* RIGHT */}
+        <div>
+          {selected ? (
+            <div className="space-y-4">
 
-      {/* DATA */}
-      <div className="space-y-8">
-        {data.map((item, index) => {
-          const ideas = JSON.parse(item.ideas || "[]");
-          const titles = JSON.parse(item.titles || "[]");
-
-          return (
-            <div key={index} className="space-y-4">
-
-              <h2 className="text-xl font-semibold">
-                {item.topic}
-              </h2>
-
-              {/* IDEAS */}
               <Card title="Ideas">
-                <ul className="list-disc pl-5 space-y-1">
-                  {ideas.map((idea: string, i: number) => (
-                    <li key={i}>{idea}</li>
+                <ul className="list-disc pl-5">
+                  {selected.ideas?.map((i: string, idx: number) => (
+                    <li key={idx}>{i}</li>
                   ))}
                 </ul>
               </Card>
 
-              {/* TITLES */}
               <Card title="Titles">
-                <ul className="list-disc pl-5 space-y-1">
-                  {titles.map((title: string, i: number) => (
-                    <li key={i} className="flex justify-between items-center">
-                      <span>{title}</span>
-                      <CopyButton text={title} />
-                    </li>
+                <ul className="list-disc pl-5">
+                  {selected.titles?.map((t: string, idx: number) => (
+                    <li key={idx}>{t}</li>
                   ))}
                 </ul>
               </Card>
 
-              {/* SCRIPT */}
               <Card title="Script">
-                <div className="flex justify-end mb-2">
-                  <CopyButton text={item.script} />
-                </div>
-
-                <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                  {item.script}
+                <div className="whitespace-pre-wrap">
+                  {selected.script}
                 </div>
               </Card>
 
             </div>
-          );
-        })}
+          ) : (
+            <p className="text-gray-500">
+              Select a history item
+            </p>
+          )}
+        </div>
+
       </div>
     </div>
   );

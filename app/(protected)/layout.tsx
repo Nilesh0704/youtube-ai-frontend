@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getToken } from "@/lib/auth";
+import Navbar from "@/components/Navbar";
 
 export default function ProtectedLayout({
   children,
@@ -19,5 +20,10 @@ export default function ProtectedLayout({
     }
   }, []);
 
-  return <>{children}</>;
+  return (
+    <div className="min-h-screen bg-black text-white">
+      <Navbar />
+      {children}
+    </div>
+  );
 }
